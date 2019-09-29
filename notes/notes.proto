@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package notes;
+
+
+service NoteService {
+    rpc List (NoteId) returns (stream Note) {}
+    rpc ListStream (stream NoteId) returns(Reply){}
+}
+
+message Reply {
+    bool uploaded = 1;
+}
+
+message Profile {
+    oneof avatar {
+      string image_url = 1;
+      bytes image_data = 2;
+    }
+  }
+
+message NoteId {
+    uint32 id = 1;
+}
+
+message Empty {}
+
+enum Corpus {
+    UNIVERSAL = 0;
+    WEB = 1;
+    IMAGES = 2;
+    LOCAL = 3;
+    NEWS = 4;
+    PRODUCTS = 5;
+    VIDEO = 6;
+}
+
+
+message Note {
+    uint32 id = 1;
+    string title = 2;
+    string content = 3;
+}
+
+message NoteList {
+   repeated Note notes = 2;
+}

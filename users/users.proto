@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package users;
+
+
+service UserService {
+    rpc List (UserId) returns (stream Profile) {}
+}
+
+message Profile {
+  uint32 id = 6;
+  oneof avatar {
+    string image_url = 1;
+    bytes image_data = 2;
+  }
+  string name = 3;
+  string last_name = 4;
+  Role role = 5;
+  }
+
+message UserId {
+    uint32 id = 1;
+}
+
+enum Role {
+  GUEST = 0;
+    ADMIN = 5;
+    PRIVATE_READ = 1;
+    PRIVATE_WRITE = 2;
+    PUBLIC_READ = 3;
+    PUBLIC_WRITE = 4;
+}
