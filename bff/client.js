@@ -11,7 +11,8 @@ const express = require('express')
 
 const app = express()
 
-
+// TODO: make wrapper based on type of req/res interface 
+// TODO: by service[method].requestStream: bool and service[method].responseStream: bool
 const C = require('../../circuit_breaker_test/opossum')
 const c1 = new C((args) => callServiceStreamReturnSync(noteClient, 'listStream', args))
 c1.fallback((e) => [e.details, 'this is a fallback 1'])
@@ -23,10 +24,12 @@ c3.fallback((e) => [e.details, 'this is a fallback 2'])
 const c2 = new C((args) => callServiceSyncReturnStream(userClient, 'list', args))
 c2.fallback((e) => [e.details, 'this is a fallback 3'])
 
+const c4 = new C((args) => callServiceSyncReturnSync(userClient, 'ListSync', args))
+c4.fallback((e) => [e, 'this is a fallback 4'])
+
 app.get('/users/:userId/notes/:noteId', async (req, res, next) => {
   try {
-
-    const data = await Promise.all([c1.fire([+req.params.userId]), c2.fire([+req.params.userId]), c3.fire([+req.params.userId])])
+    const data = await Promise.all([c4.fire([+req.params.userId]), c1.fire([+req.params.userId]), c2.fire([+req.params.userId]), c3.fire([+req.params.userId])])
     res.json(data.reduce((prev, curr) => prev.concat(curr), []))
   } catch (e) {
     console.error(e)
@@ -34,16 +37,6 @@ app.get('/users/:userId/notes/:noteId', async (req, res, next) => {
   }
 })
 
-
-
-
-// var call = client.list();
-// const num = Math.floor(Math.random() * 100)
-// call.write(num)
-
-// if stream duplex, do both sides events
-// if stream only readable read all and dump data
-// if stream writable write all and dump
 
 function callServiceSyncReturnSync(service, method, args) {
   return new Promise((resolve, reject) => {
@@ -54,7 +47,8 @@ function callServiceSyncReturnSync(service, method, args) {
   })
 }
 
-
+// collects buffer until end because of http 1.1
+// TODO check sending as chunked each chunk
 function callServiceSyncReturnStream(service, method, args) {
   return new Promise((resolve, reject) => {
     let data = []
@@ -68,7 +62,6 @@ function callServiceSyncReturnStream(service, method, args) {
   })
 }
 
-// TODO: decide type of req/res interface by service[method].requestStream: bool and service[method].responseStream: bool
 function callServiceStreamReturnSync(service, method, args) {
   return new Promise((resolve, reject) => {
     const call = service[method]((err, response) => {

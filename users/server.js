@@ -22,6 +22,10 @@ function listUsers(call, callback) {
   call.end()
 }
 
+function listUsersSync(_, callback) {
+  callback(new Error("testtttt"), users)
+}
+
 // used for streamin
 // function listUsers(call, callback) {
 //   call.on('data', function (n) {
@@ -48,7 +52,8 @@ function listUsers(call, callback) {
 // }
 
 server.addService(usersProto.users.UserService.service, {
-  list: listUsers
+  list: listUsers,
+  ListSync: listUsersSync
 })
 server.bind('127.0.0.1:50052', grpc.ServerCredentials.createInsecure())
 console.log('Server running at http://127.0.0.1:50052')

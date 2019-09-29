@@ -5,6 +5,7 @@ package users;
 
 service UserService {
     rpc List (UserId) returns (stream Profile) {}
+    rpc ListSync(UserId) returns (Profiles) {}
 }
 
 message Profile {
@@ -17,6 +18,9 @@ message Profile {
   string last_name = 4;
   Role role = 5;
   }
+message Profiles{
+  repeated Profile profile = 1;
+}
 
 message UserId {
     uint32 id = 1;
