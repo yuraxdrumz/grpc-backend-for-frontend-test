@@ -1,81 +1,84 @@
 const grpc = require('grpc')
-const USERS_PATH = '../users/users.proto'
-const UserService = grpc.load(USERS_PATH).users.UserService
-const NOTES_PATH = '../notes/notes.proto'
-const NoteService = grpc.load(NOTES_PATH).notes.NoteService
-const userClient = new UserService('localhost:50052', grpc.credentials.createInsecure())
-const noteClient = new NoteService('localhost:50051', grpc.credentials.createInsecure())
-
 const Promise = require('bluebird')
 const express = require('express')
-
 const app = express()
 
-// TODO: make wrapper based on type of req/res interface 
-// TODO: by service[method].requestStream: bool and service[method].responseStream: bool
-const C = require('../../circuit_breaker_test/opossum')
-const c1 = new C((args) => callServiceStreamReturnSync(noteClient, 'listStream', args))
-c1.fallback((e) => [e.details, 'this is a fallback 1'])
 
-const c3 = new C((args) => callServiceSyncReturnStream(noteClient, 'list', args))
-c3.fallback((e) => [e.details, 'this is a fallback 2'])
+const GrpcBuilder = require('./grpcBuilder')
+const Grpc2HTTP = require('./grpc2HTTP')
+const CircuitBreaker = require('../../circuit_breaker_test/opossum')
+const CircuitBreakerPrometheus = require('../../circuit_breaker_test/opossum-prometheus')
+const interceptor = require('./interceptor')
+
+const userClient = new GrpcBuilder(grpc)
+  .withAddress('localhost:50052')
+  .withCredentials(new grpc.credentials.createInsecure())
+  .withPackageName('users')
+  .withServiceName('UserService')
+  .withProtoPath('../users/users.proto')
+  .withInterceptor(interceptor)
+  .build()
+
+const noteClient = new GrpcBuilder(grpc)
+  .withAddress('localhost:50051')
+  .withCredentials(new grpc.credentials.createInsecure())
+  .withPackageName('notes')
+  .withServiceName('NoteService')
+  .withProtoPath('../notes/notes.proto')
+  .withInterceptor(interceptor)
+  .build()
+
+const listStream = new Grpc2HTTP()
+  .withClass(noteClient)
+  .withMethod('listStream')
+  .build()
+
+const list = new Grpc2HTTP()
+  .withClass(noteClient)
+  .withMethod('list')
+  .build()
+
+const usersList = new Grpc2HTTP()
+  .withClass(userClient)
+  .withMethod('list')
+  .build()
+
+const usersListSync = new Grpc2HTTP()
+  .withClass(userClient)
+  .withMethod('listSync')
+  .build()
+
+const usersListStream = new Grpc2HTTP()
+  .withClass(userClient)
+  .withMethod('listStream')
+  .build()
 
 
-const c2 = new C((args) => callServiceSyncReturnStream(userClient, 'list', args))
-c2.fallback((e) => [e.details, 'this is a fallback 3'])
+const c1 = new CircuitBreaker(usersListStream, {
+  name: 'test'
+})
+const c2 = new CircuitBreaker(listStream, {
+  name: 'test2'
+})
 
-const c4 = new C((args) => callServiceSyncReturnSync(userClient, 'ListSync', args))
-c4.fallback((e) => [e, 'this is a fallback 4'])
+c1.fallback(e => 'fallback1')
+c2.fallback(e => 'fallback2')
+const cp = new CircuitBreakerPrometheus([c1, c2])
 
 app.get('/users/:userId/notes/:noteId', async (req, res, next) => {
   try {
-    const data = await Promise.all([c4.fire([+req.params.userId]), c1.fire([+req.params.userId]), c2.fire([+req.params.userId]), c3.fire([+req.params.userId])])
-    res.json(data.reduce((prev, curr) => prev.concat(curr), []))
+    const data = await c1.fire([1])
+    // const data = await Promise.all([c4.fire([+req.params.userId]), c1.fire([+req.params.userId]), c2.fire([+req.params.userId]), c3.fire([+req.params.userId])])
+    res.json(data)
   } catch (e) {
     console.error(e)
     res.status(e.status || 500).json(e.message)
   }
 })
 
-
-function callServiceSyncReturnSync(service, method, args) {
-  return new Promise((resolve, reject) => {
-    service[method](...args, (err, response) => {
-      if (err) reject(err)
-      resolve(response)
-    })
-  })
-}
-
-// collects buffer until end because of http 1.1
-// TODO check sending as chunked each chunk
-function callServiceSyncReturnStream(service, method, args) {
-  return new Promise((resolve, reject) => {
-    let data = []
-    const call = service[method](...args)
-    call.on('data', (r) => {
-      console.log(`data: `, r)
-      data.push(r)
-    })
-    call.on('end', () => resolve(data))
-    call.on('error', reject)
-  })
-}
-
-function callServiceStreamReturnSync(service, method, args) {
-  return new Promise((resolve, reject) => {
-    const call = service[method]((err, response) => {
-      console.log(err, response)
-      if (err) reject(err)
-      resolve([response])
-    })
-    for (let i of args) {
-      console.log(i)
-      call.write(i)
-    }
-    call.end()
-  })
-}
+app.get('/metrics', (req, res, next) => {
+  res.end(cp.metrics)
+})
 
 
 

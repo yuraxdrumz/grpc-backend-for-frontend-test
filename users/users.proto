@@ -6,6 +6,7 @@ package users;
 service UserService {
     rpc List (UserId) returns (stream Profile) {}
     rpc ListSync(UserId) returns (Profiles) {}
+    rpc ListStream(stream UserId) returns (stream Profile) {}
 }
 
 message Profile {
